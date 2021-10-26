@@ -1,0 +1,822 @@
+---
+title: "Appendix - Wallen, Dentzman, & Hammell (2021)"
+author: "Code Created by Abbey E. Hammell (hammell@umn.edu)"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+
+---
+
+<br>
+
+## 1  A Few Notes
+<br>
+
+- This script is a supplement to the following white paper: *Wallen, K., Dentzman, K. E., & Hammell, A. E. (2021). Exploratory diary study of survey request frequency among research professionals.* 
+
+- Correspondence concerning the article should be address to **Kenneth E. Wallen**, Department of Natural Resources & Society, University of Idaho, 875 Perimeter Drive, MS 1139, Moscow, ID 83844.  E-mail: wallenk3@gmail.com
+
+- Correspondence concerning this code should be addressed to **Abbey E. Hammell**, Liberal Arts Technologies & Innovation Services, University of Minnesota, 131 Anderson Hall, 257 19th Ave. SE, Minneapolis, MN 55455. E-mail: hammell@umn.edu
+
+- The script was created for readability, not necessarily executing the code with the least amount of lines. Feel free to modify the code to be less repetitive. 
+
+- The code is organized in the order that the data are presented in the Wallen, Dentzman, & Hammell (2021) paper. 
+
+<br>
+<br>
+
+## 2  Data & Workspace Setup
+<br>
+
+### 2.1  Workspace Setup & Data Import
+<br>
+```{r setup, include=TRUE}
+# set up global knitr settings
+knitr::opts_chunk$set(echo = TRUE)
+
+# clear R environment
+rm(list = ls())
+
+# load relative packages 
+pacman::p_load(dplyr, 
+               ggplot2, 
+               viridis, 
+               kableExtra,
+               viridis,
+               scales)
+
+# set working directory 
+# reset working directory to your own folder for your own use
+setwd("~/Box/CLA RSS Data Sharing/WERA_Survey_Project") 
+
+# import data
+wera_dat <- read.csv("wera_diary_code_final.csv", header = T)
+```
+<br>
+
+### 2.2  A Little Data Cleaning
+<br>
+```{r}
+# change case_id, Sponsor_FINAL, and COMPLETED to factor variables, they're imported as numeric
+# case_id refers to each subject ID 
+wera_dat$case_id <- factor(wera_dat$case_id)
+wera_dat$Sponsor_FINAL <- factor(wera_dat$Sponsor_FINAL)
+wera_dat$COMPLETED <- factor(wera_dat$COMPLETED)
+
+
+# change contact_mode & RESPONSE.MODE to factor variables, they're imported as integers
+# need to also relabel recoded integers to the actual contact & response modes used 
+
+# contact mode as factor variable
+wera_dat$contact_mode <- factor(wera_dat$contact_mode, levels = c(1,2,3,4,5,6,7,8,9,10), labels = c("Email","Internet","In-person","Receipt","Pop-Up","Other","Mail","Phone","Text","Kiosk"))
+
+# response mode as factor
+wera_dat$RESPONSE.MODE <- factor(wera_dat$RESPONSE.MODE, levels = c(1,2,3,4,5,6,7,8,9), labels = c("Email", "Internet", "In-person", "Receipt", "Other", "Mail", "Phone", "Text", "Tablet"))
+
+```
+
+<br>
+<br>
+
+## 3  General Results Summary 
+<br>
+
+### 3.1  N's, Central Tendency, & Spread
+<br>
+```{r}
+# number of surveys per individual (top row = case_id (i.e. subject ID), bottom row = # of surveys)
+table(wera_dat$case_id)
+
+# mean & median number of surveys per individual 
+numsurveys <- as.matrix(table(wera_dat$case_id))
+mean(numsurveys[,1]) #get mean 
+median(numsurveys[,1]) #get median
+
+# mode number of surveys
+# 12 & 13 are the highest, with 3 participants who had either 12 or 13 surveys 
+# top row = # of surveys, bottom row = # of participants who reported that number of surveys received over the course of the month
+table(numsurveys[,1])
+
+# standard deviation of number of surveys per individual 
+sd(numsurveys[,1])
+
+```
+<br>
+<br>
+
+
+## 4  Survey Contact Mode
+<br>
+
+### 4.1  Contact Mode - General Stats
+<br>
+```{r}
+# get frequency of each contact mode 
+contactmode <- as.data.frame(table(wera_dat$contact_mode))
+names(contactmode)[1] <- "Contact_Mode" #rename the first column as "Contact_Mode"
+
+# get percentage of each contact mode
+contactmode$Percent <- contactmode$Freq/sum(contactmode$Freq) 
+
+# display contact mode chart
+contactmode %>% 
+  kbl() %>% 
+  kable_styling()
+```
+<br>
+
+### 4.2  Individual Contributions to Survey Contact Modes (Figure 1)
+<br>
+Note: *Pro.Mode.Requests* = Proportion of a specific survey contact mode type that a given participant was responsible for. For instance, the first row in the table below shows that Individual 1 reported 4.26% of the total contact requests via email reported in the sample.  
+```{r}
+# get a frequency table of contact mode by participant
+contactbyperson <- table(wera_dat$contact_mode, wera_dat$case_id)
+contactbyperson.numbers <- as.data.frame(contactbyperson)
+
+# then calculate the percentage
+# note: you can do this with less code using the tidyverse "dplyr" package; examples of this in some of the table creations below. This chunk of code shows you an alternative method to summarize the data.
+contactbyperson[1,] <- round(contactbyperson[1,]/sum(contactbyperson[1,]) * 100, 2)
+contactbyperson[2,] <- round(contactbyperson[2,]/sum(contactbyperson[2,]) * 100, 2)
+contactbyperson[3,] <- round(contactbyperson[3,]/sum(contactbyperson[3,]) * 100, 2)
+contactbyperson[4,] <- round(contactbyperson[4,]/sum(contactbyperson[4,]) * 100, 2)
+contactbyperson[5,] <- round(contactbyperson[5,]/sum(contactbyperson[5,]) * 100, 2)
+contactbyperson[6,] <- round(contactbyperson[6,]/sum(contactbyperson[6,]) * 100, 2)
+contactbyperson[7,] <- round(contactbyperson[7,]/sum(contactbyperson[7,]) * 100, 2)
+contactbyperson[8,] <- round(contactbyperson[8,]/sum(contactbyperson[8,]) * 100, 2)
+contactbyperson[9,] <- round(contactbyperson[9,]/sum(contactbyperson[9,]) * 100, 2)
+contactbyperson[10,] <- round(contactbyperson[10,]/sum(contactbyperson[10,]) * 100, 2)
+
+# then set as a dataframe and update the names in the dataframe
+contactbyperson<- as.data.frame(contactbyperson)
+names(contactbyperson) <- c("Contact.Mode","Individual","Pro.Mode.Requests")
+
+#display table
+contactbyperson %>% 
+  kbl() %>% 
+  kable_styling()
+
+##
+#### GRAPH INDIVIDUALS WHO MADE UP EACH CONTACT MODE REQUEST
+##
+
+# turn 0's to NAs for graphing purposes 
+contactbyperson.NA <- contactbyperson 
+contactbyperson.NA[contactbyperson.NA == 0] <- NA 
+
+# create graph
+figure1 <- ggplot(data = contactbyperson.NA, aes(x=Contact.Mode, y=Pro.Mode.Requests, fill = Individual)) + 
+  geom_bar(stat="identity", color = "black") + 
+  labs(x = "Contact Mode", y = "% of Contact Mode Requests") +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_minimal() +
+  scale_fill_manual(values = viridis_pal()(23)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(margin = margin(r = 20, l = 20)),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.line = element_line(color = "black", size = 0.5),
+        axis.text.x = element_text(angle = 60, vjust = 1, hjust=1),
+        legend.title = element_text(face = "bold"),
+        text = element_text(family = "Arial"),
+        plot.margin = margin(t = 1, unit = "cm"),
+        legend.margin = margin(t = 1, r = 0.5, unit = "cm")) 
+
+# display graph
+figure1
+
+# get today's date to add to graph file name
+date <- Sys.Date()
+date <- gsub("-","",date)
+
+# save graph to working directory
+ggsave(paste0("ContactbyPerson_",date), device = "png", units = "in", width = 7, height = 4)
+
+```
+*Note:* "Warning: Removed 172 rows..." refers to the observations that had "0" in the "Pro.Mode.Requests" column in the above table. Individuals who did not contribute to any contact requests for a given contact mode type are not included in the bar graph for that specific contact mode type. 
+
+<br>
+
+### 4.3  Individual Contributions to Survey Contact Modes - Other Stats
+<br>
+Finding the number of respondents receiving at least 1 contact mode of each survey type.
+*Frequency* is the number of participants that received at least one contact mode of that type. *Percent* is found by dividing each *Frequency* number by 23 (i.e. the total number of participants).
+```{r}
+# create data frame that removes observations of mode + person if that person received 0 requests in that mode
+contactbyperson.summary <- contactbyperson %>% 
+  filter(Pro.Mode.Requests != 0)
+
+# count the number of participants that received each type of request 
+# create Percent variable by dividing "Frequency" by total number of participants (i.e. 23)
+contactbyperson.summary %>% 
+  group_by(Contact.Mode) %>% 
+  count(name = "Frequency") %>% 
+  mutate(Percent = round((Frequency/23) * 100, 2))  %>%  
+  kbl() %>% # then, display the table
+  kable_styling()
+  
+```
+
+<br>
+<br>
+
+
+## 5  Survey Response Mode 
+
+<br>
+
+### 5.1  Response Mode - General Stats
+<br>
+```{r}
+# get frequency of each response mode 
+responsemode <- as.data.frame(table(wera_dat$RESPONSE.MODE))
+names(responsemode)[1] <- "Response_Mode"
+
+# get percentage of each response mode 
+responsemode$Percent <- responsemode$Freq/sum(responsemode$Freq)
+
+# display response mode table
+responsemode %>% 
+  kbl() %>% 
+  kable_styling()
+```
+
+<br>
+
+### 5.2 Individual Contributions to Survey Response Modes (Figure 2)
+<br>
+Note: *Pro.Mode.Requests* = Proportion of a specific response mode requests that a given participant was responsible for. For instance, the second row in the table below shows that Individual 1 reported 4.20% of the total Internet response mode requests reported in the sample.  
+```{r}
+# get a frequency table of contact mode by participant
+resmodebyperson <- table(wera_dat$RESPONSE.MODE, wera_dat$case_id)
+resmodebyperson.numbers <- as.data.frame(resmodebyperson) 
+
+# then calculate the percentage
+# note: you can do this with less code using the tidyverse "dplyr" package; examples of this in some of the table creation above & below. This chunk of code shows you an alternative method to summarize the data.
+resmodebyperson[1,] <- round(resmodebyperson[1,]/sum(resmodebyperson[1,]) * 100, 2)
+resmodebyperson[2,] <- round(resmodebyperson[2,]/sum(resmodebyperson[2,]) * 100, 2)
+resmodebyperson[3,] <- round(resmodebyperson[3,]/sum(resmodebyperson[3,]) * 100, 2)
+resmodebyperson[4,] <- round(resmodebyperson[4,]/sum(resmodebyperson[4,]) * 100, 2)
+resmodebyperson[5,] <- round(resmodebyperson[5,]/sum(resmodebyperson[5,]) * 100, 2)
+resmodebyperson[6,] <- round(resmodebyperson[6,]/sum(resmodebyperson[6,]) * 100, 2)
+resmodebyperson[7,] <- round(resmodebyperson[7,]/sum(resmodebyperson[7,]) * 100, 2)
+resmodebyperson[8,] <- round(resmodebyperson[8,]/sum(resmodebyperson[8,]) * 100, 2)
+resmodebyperson[9,] <- round(resmodebyperson[9,]/sum(resmodebyperson[9,]) * 100, 2)
+
+# then set as a dataframe and update the names in the dataframe
+resmodebyperson<- as.data.frame(resmodebyperson)
+names(resmodebyperson) <- c("Response.Mode","Individual","Pro.Mode.Requests")
+
+# display table
+resmodebyperson %>% 
+  kbl() %>% 
+  kable_styling()
+
+##
+#### GRAPH INDIVIDUALS WHO MADE UP EACH CONTACT MODE REQUEST
+##
+
+# turn 0's to NAs for graphing purposes 
+resmodebyperson.NA <- resmodebyperson 
+resmodebyperson.NA[resmodebyperson.NA == 0] <- NA 
+
+# create graph
+figure2 <- ggplot(data = resmodebyperson.NA, aes(x=Response.Mode, y=Pro.Mode.Requests, fill = Individual)) + 
+  geom_bar(stat="identity", color = "black") + 
+  labs(x = "Response Mode", y = "% of Response Mode Requests") +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_minimal() +
+  scale_fill_manual(values = viridis_pal()(23)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(margin = margin(r = 20, l = 20)),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.line = element_line(color = "black", size = 0.5),
+        axis.text.x = element_text(angle = 60, vjust = 1, hjust=1),
+        legend.title = element_text(face = "bold"),
+        text = element_text(family = "Arial"),
+        plot.margin = margin(t = 1, unit = "cm"),
+        legend.margin = margin(t = 1, r = 0.5, unit = "cm")) 
+
+# display graph
+figure2
+
+# get today's date
+date <- Sys.Date()
+date <- gsub("-","",date)
+
+# save graph to working directory
+ggsave(paste0("ResmodeByPerson_",date), device = "png", units = "in", width = 7, height = 4)
+```
+*Note:* "Warning: Removed 165 rows..." refers to the observations that had "0" in the "Pro.Mode.Requests" column in the above table. Individuals who did not contribute to any response mode requests for a given response mode type are not included in the bar graph for that specific response mode type. 
+
+<br>
+
+
+### 5.3  Individual Contributions to Survey Response Modes - Other Stats
+<br>
+
+Finding the number of respondents receiving at least 1 response mode request of each survey type. *Frequency* is the number of participants that received at least one response mode request of that type. *Percent* is found by dividing each *Frequency* number by 23 (i.e. the total number of participants).
+```{r}
+# create data frame that removes observations of mode + person if that person received 0 requests in that mode
+resmodebyperson.summary <- resmodebyperson %>% 
+  filter(Pro.Mode.Requests != 0)
+
+# count the number of participants that received each type of request 
+# create Percent variable by dividing "Frequency" by total number of participants (i.e. 23)
+resmodebyperson.summary %>% 
+  group_by(Response.Mode) %>% 
+  count(name = "Frequency") %>% 
+  mutate(Percent = round((Frequency/23) * 100, 2)) %>%  
+  kbl() %>% # then, display the table
+  kable_styling()
+```
+
+<br>
+<br>
+
+
+## 6  Survey Type Distribution
+<br>
+
+### 6.1  Survey Type Count
+<br>
+*Note:* "Scholarly" is the same thing as "Academic". 
+```{r}
+# create dataframe for bar graphs
+surveytype.per <- as.data.frame(round(table(wera_dat$Sponsor_FINAL))) 
+
+# update variable names
+names(surveytype.per) <- c("Survey.Type", "Freq")
+
+# add total percentage to dataframe
+surveytype.per$Percent <- round((surveytype.per$Freq / sum(surveytype.per$Freq)) * 100, 2)
+
+# give order to the factor variables for graphing purposes
+surveytype.per$Survey.Type <- factor(surveytype.per$Survey.Type, ordered = T, levels = c("Marketing","Admin","Undefined","Political","Scholarly"))
+
+# final dataframe used to create the bar plots for "Distribution of Survey Types" 
+surveytype.per %>% 
+  kbl() %>% 
+  kable_styling()
+```
+<br>
+
+### 6.2  Survey Type Count - Graph
+<br>
+```{r, echo = F, warning = FALSE}
+surveytype.fig <- ggplot(data = surveytype.per, aes(x=reorder(Survey.Type, -Percent), y=Percent, fill = Survey.Type)) + 
+  geom_bar(stat="identity") + 
+  geom_text(aes(label = Percent), position = position_dodge(width = 1), hjust = -0.3) +
+  scale_fill_viridis(discrete = TRUE, option = "plasma") +
+  labs(title = "Distribution of Survey Types", x = "Survey Type", y = "%, Out of Total Surveys Received") +
+  scale_x_discrete(limits = rev(levels(surveytype.per$Survey.Type))) +
+  scale_y_continuous(limits = c(0,55), expand = c(0,0)) +
+  theme_minimal() +
+  coord_flip() + 
+  theme(plot.title = element_text(hjust = 0.5, size = 20, face = "bold"),
+        legend.position = "none",
+        legend.title = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(margin = margin(r = 20)),
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.line = element_line(color = "black", size = 0.5)) 
+
+# display graph 
+surveytype.fig
+```
+<br>
+<br>
+
+### 6.3  Individual Contributions to Survey Type Categories
+
+<br>
+
+This chunk of code is creating the dataframe for the bar graph below. It is calculating the percent that each person "contributed" to the total survey requests for a given survey type. For example, Individual 1 contributed to 6.19% of Academic surveys. 
+```{r}
+#create dataframe, showing the % of requests that each person "contributed" for each survey type
+requestbyperson <- table(wera_dat$Sponsor_FINAL, wera_dat$case_id)
+requestbyperson[1,] <- round(requestbyperson[1,]/sum(requestbyperson[1,]) * 100, 2)
+requestbyperson[2,] <- round(requestbyperson[2,]/sum(requestbyperson[2,]) * 100, 2)
+requestbyperson[3,] <- round(requestbyperson[3,]/sum(requestbyperson[3,]) * 100, 2)
+requestbyperson[4,] <- round(requestbyperson[4,]/sum(requestbyperson[4,]) * 100, 2)
+requestbyperson[5,] <- round(requestbyperson[5,]/sum(requestbyperson[5,]) * 100, 2)
+requestbyperson <- as.data.frame(requestbyperson) #turn into data frame
+names(requestbyperson) <- c("Survey.Type","Individual","Prop.Requests") #rename variables
+requestbyperson$Survey.Type <- gsub("Scholarly","Academic", requestbyperson$Survey.Type) #change "Scholarly" category to "Academic"(just a name change)
+requestbyperson$Survey.Type <- factor(requestbyperson$Survey.Type) #set survey type as factor variable
+
+#double check class of individual is factor
+#class(requestbyperson$Individual) #looks GOOD; commented out 
+
+#display requestbyperson table
+requestbyperson %>% 
+  kbl() %>% 
+  kable_styling()
+```
+
+<br>
+
+### 6.4  Individual Contributions to Survey Type Categories (Figure 3)
+<br>
+
+```{r, echo = FALSE, warning = FALSE}
+#turn 0's to NAs for graphing purposes 
+requestbyperson.NA <- requestbyperson
+requestbyperson.NA[requestbyperson.NA == 0] <- NA 
+
+# create graph
+figure3 <- ggplot(data = requestbyperson.NA, aes(x=reorder(Survey.Type, -Prop.Requests), y=Prop.Requests, fill = Individual)) + 
+  geom_bar(stat="identity", color = "black") + 
+  labs(x = "Survey Type", y = "% of Survey Type Requests") +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_minimal() +
+  scale_fill_manual(values = viridis_pal()(23)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(margin = margin(r = 20)),
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.line = element_line(color = "black", size = 0.5),
+        legend.title = element_text(face = "bold"),
+        text = element_text(family = "Arial")) 
+
+# display graph 
+figure3
+
+# get today's date to add to graph file name
+date <- Sys.Date()
+date <- gsub("-","",date)
+
+# save graph to working directory
+ggsave(paste0("IndividualContributions_",date), device = "png", units = "in", width = 7, height = 4)
+```
+<br>
+
+
+### 6.5  Individual Contributions to Survey Type Categories - Other Stats
+<br>
+
+Finding the number of respondents receiving at least 1 of each survey type.
+*Percent* is found by dividing each number by 23 (i.e. the total number of participants).
+```{r}
+# administrative 
+length(which(requestbyperson$Survey.Type == "Admin" & requestbyperson$Prop.Requests != 0))
+
+# marketing
+length(which(requestbyperson$Survey.Type == "Marketing" & requestbyperson$Prop.Requests != 0))
+
+# academic/scholarly
+length(which(requestbyperson$Survey.Type == "Academic" & requestbyperson$Prop.Requests != 0))
+
+# political 
+length(which(requestbyperson$Survey.Type == "Political" & requestbyperson$Prop.Requests != 0))
+
+# undefined
+length(which(requestbyperson$Survey.Type == "Undefined" & requestbyperson$Prop.Requests != 0))
+```
+
+<br>
+<br>
+
+
+
+## 7  Contact Mode by Survey Type
+<br>
+
+### 7.1  Contact Mode by Survey Type - Stats
+<br>
+Note: *Percent_bySurveyType* tells the percentage that a specific contact mode type contributed to the total contact requests for a given survey type (i.e. sponsor) category. For instance, the first row in the table below shows that Emails made up approx. 93.81% of the contact requests for administrative surveys. 
+```{r}
+# create count & percent summary
+# here's an example of creating summaries using dplyr 
+contactbysurveytype <- wera_dat %>% 
+  group_by(Sponsor_FINAL, contact_mode) %>% 
+  count(name = "Frequency") %>% 
+  ungroup(contact_mode) %>% 
+  mutate(Percent_bySurveyType = round((Frequency / sum(Frequency)) * 100, 2))
+
+
+## display table 
+contactbysurveytype %>% 
+  kbl() %>% 
+  kable_styling()
+```
+<br>
+
+### 7.2  Contact Mode by Survey Type - Graph (Figure 4)
+<br>
+
+Shows the percentage of contact modes used for each survey type category.
+```{r}
+# create graph
+figure4 <- ggplot(data = contactbysurveytype, aes(x = Sponsor_FINAL, y = Percent_bySurveyType, fill = contact_mode)) + 
+  geom_bar(stat="identity", color = "black") + 
+  labs(x = "Survey Type", y = "% of Contacts", fill = "Contact Mode") +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_x_discrete(labels = c("Admin","Marketing","Political", "Academic", "Undefined")) + 
+  theme_minimal() +
+  scale_fill_manual(values = viridis_pal()(10)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(margin = margin(r = 20)),
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.line = element_line(color = "black", size = 0.5),
+        legend.title = element_text(face = "bold"),
+        text = element_text(family = "Arial")) 
+
+# display graph
+figure4
+
+# get today's date to add to graph file name
+date <- Sys.Date()
+date <- gsub("-","",date)
+
+# save graph to working directory
+ggsave(paste0("SurveyTypebyContact_",date), device = "png", units = "in", width = 7, height = 4)
+```
+
+<br>
+<br>
+
+## 8  Response Mode by Survey Type
+<br>
+
+### 8.1  Response Mode by Survey Type - Stats
+<br>
+Note: *Percent_bySurveyType* tells the percentage that a specific response mode type contributed to the total response mode requests for a given survey type (i.e. sponsor) category. For instance, the second row in the table below shows that Internet made up approx. 84.54% of the response mode requests for administrative surveys. 
+```{r}
+# create count & percent summary
+# here's an example of creating summaries using dplyr 
+responsebysurveytype <- wera_dat %>% 
+  group_by(Sponsor_FINAL, RESPONSE.MODE) %>% 
+  count(name = "Frequency") %>% 
+  ungroup(RESPONSE.MODE) %>% 
+  mutate(Percent_bySurveyType = round((Frequency / sum(Frequency)) * 100, 2))
+
+
+# display table 
+responsebysurveytype %>% 
+  kbl() %>% 
+  kable_styling()
+```
+<br>
+
+### 8.2  Response Mode by Survey Type - Graph (Figure 5)
+<br>
+Shows the percentage of response mode requests for each survey type. 
+```{r}
+# create graph 
+figure5 <- ggplot(data = responsebysurveytype, aes(x = Sponsor_FINAL, y = Percent_bySurveyType, fill = RESPONSE.MODE)) + 
+  geom_bar(stat="identity", color = "black") + 
+  labs(x = "Survey Type", y = "% of Requests", fill = "Response Mode") +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_minimal() +
+  scale_x_discrete(labels = c("Admin","Marketing","Political", "Academic", "Undefined")) + 
+  scale_fill_manual(values = viridis_pal()(10)) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(margin = margin(r = 20)),
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.line = element_line(color = "black", size = 0.5),
+        legend.title = element_text(face = "bold"),
+        text = element_text(family = "Arial")) 
+
+# display graph 
+figure5
+
+# get today's date to add to graph file name
+date <- Sys.Date()
+date <- gsub("-","",date)
+
+# save graph to working directory
+ggsave(paste0("SurveyTypebyResponse_",date), device = "png", units = "in", width = 7, height = 4)
+```
+
+
+<br>
+<br>
+
+
+
+## 9  Survey Completion 
+<br>
+
+### 9.1  Survey Completion - General Stats
+<br>
+**Completion Codes:**<br>
+- 1 = *Not Completed* <br>
+- 2 = *Partially Completed* <br>
+- 3 = *Completed* <br>
+<br>
+```{r}
+##
+### CLEAN DATA 
+##
+
+# recode values in COMPLETED to numeric if they were "n" or "y"; CLEANED DIRECTLY in wera_dat
+i <- which(wera_dat$COMPLETED == "n")
+j <- which(wera_dat$COMPLETED == "y")
+wera_dat$COMPLETED[i] <- 1
+wera_dat$COMPLETED[j] <- 3
+
+# drop factor levels of "n" and "y"
+wera_dat$COMPLETED.clean <- droplevels(wera_dat$COMPLETED, exclude = c("n","y"))
+
+
+##
+### CALCULATE GENERAL STATISTICS
+##
+
+# number of completed versus not completed
+# 1 = Not Completed, 2 = Partially Completed, 3 = "Completed" 
+# top = completion status code, bottom = number of observations w/ that completion code
+table(wera_dat$COMPLETED.clean)
+
+# proportion of completed versus not completed (NA = blank)
+# top = completion status code, bottom = proportion of observations w/ that completion code
+table(wera_dat$COMPLETED.clean)/length(wera_dat$COMPLETED.clean)
+```
+
+<br>
+
+### 9.2  Completion Status by Survey Type - General Stats
+<br>
+```{r}
+# create count & percent summary
+completecount <- wera_dat %>% 
+  group_by(COMPLETED.clean, Sponsor_FINAL) %>% 
+  count(name = "Frequency") %>% 
+  ungroup(COMPLETED.clean) %>% 
+  mutate(Percent_bySurveyType = round((Frequency / sum(Frequency)) * 100, 2))
+
+# rename first two variables of completecount data frame
+names(completecount)[1:2] <- c("Completion","Survey.Type")
+
+# make blanks in "Completion" column as NAs
+completecount$Completion[which(completecount$Completion == "")] <- NA
+
+# replace "Survey.Type" values that say "scholarly" with "academic" 
+completecount$Survey.Type <- as.character(completecount$Survey.Type)
+completecount$Survey.Type[which(completecount$Survey.Type == "Scholarly")] <- "Academic"
+completecount$Survey.Type <- factor(completecount$Survey.Type)
+
+# display table (table shows percentage by Survey Type)
+completecount %>% 
+  kbl() %>% 
+  kable_styling()
+```
+<br>
+
+
+### 9.3  Completion Status by Survey Type (Figure 6) 
+
+<br>
+
+*NOTE:* Surveys where individuals did not specify the completion status are excluded from the following graph.
+```{r, warning = FALSE, echo = FALSE}
+##
+### CLEAN DATA FOR GRAPH
+##
+
+# remove "Completion" column NAs for graphing purposes
+# also remove the "Percent_bySurveyType" column
+completecount.NA.rm <- completecount[!is.na(completecount$Completion),1:3] 
+
+# save variables as correct data types 
+completecount.NA.rm$Completion <- factor(completecount.NA.rm$Completion)
+completecount.NA.rm$Survey.Type <- factor(completecount.NA.rm$Survey.Type)
+
+##
+### GRAPH
+##
+
+figure6 <- ggplot(data = completecount.NA.rm, aes(x=reorder(Survey.Type, -Frequency), y=Frequency, fill = rev(Completion))) + 
+  geom_bar(stat="identity") + 
+  geom_text(aes(label = Frequency, group = rev(Completion)), position = position_stack(vjust = .5), na.rm = TRUE) +
+  labs(x = "Survey Type", y = "Number of Surveys", fill = "Completion \nStatus") +
+  scale_fill_manual(labels = c("Completed","Partial", "Not Completed"), values = c("grey45","grey65","grey90")) +
+  scale_x_discrete(limits = rev(levels(completecount.NA.rm$Survey.Type))) +
+  scale_y_continuous(limits = c(0,160), expand = c(0,0)) +
+  theme_minimal() +
+  coord_flip() + 
+  theme(legend.title = element_text(face = "bold"),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(margin = margin(r = 20)),
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.line = element_line(color = "black", size = 0.5),
+        text = element_text(family = "Arial"))
+
+# display graph
+figure6
+
+# get today's date to add to graph file name
+date <- Sys.Date()
+date <- gsub("-","",date)
+
+# save graph to working directory
+ggsave(paste0("CompletionDistribution_",date), device = "png", units = "in", width = 7, height = 4)
+```
+
+
+<br>
+
+
+### 9.4  Percent of Non-Response for Each Survey Type
+<br>
+
+This chunk of code is creating the dataframe for the bar graph below. It is calculating the nonresponse rate for each survey type. In particular, we want to get percent nonsresponse for each survey type, *only* including observations that had completion information reported. <br>
+
+**Completion Codes:** <br>
+-1 = *Not Completed* <br>
+-2 = *Partially Completed* <br>
+-3 = *Completed* <br>
+
+Note: "Group_n" and "Percent" are relative to each category. For example, all rows for "Admin" have a "Group_n" value of 94 since there are a total of 94 Administrative surveys with completion data available. Percent was calculated by taking the Frequency/Group_n value for each row. 
+```{r}
+#get percent nonsresponse for each survey type, only including observations that had completion information reported
+nonresponse_per <- completecount.NA.rm %>% 
+  group_by(Survey.Type) %>% 
+  mutate(Group_n = sum(Frequency)) %>% 
+  mutate(Percent = round((Frequency/Group_n) *100, 2))
+
+#final dataframe 
+nonresponse_per %>% 
+  kbl() %>% 
+  kable_styling()
+```
+<br>
+
+### 9.5  Percent of Non-Response for Each Survey Type (Figure 7)
+
+<br>
+```{r, echo = FALSE}
+##
+### CLEAN DATA
+##
+
+#only keep rows of data for Completion = 1 (i.e. Not Completed)
+#remove undefined category
+nonresponse_per_graph <- nonresponse_per %>% 
+  filter(Completion == 1) %>% 
+  filter(Survey.Type != "Undefined")
+
+## 
+### GRAPH DATA
+##
+
+#create graph
+figure7 <- ggplot(data = nonresponse_per_graph, aes(x=reorder(Survey.Type, -Percent), y=Percent, fill = Survey.Type)) + 
+  geom_bar(stat="identity") + 
+  geom_text(aes(label = paste0(Percent,"%")), position = position_dodge(width = 1), vjust = -0.5, size = 4.5) +
+  scale_fill_manual(values = c("black","black","black","black")) +
+  labs(x = "Survey Type", y = "% Not Completed") +
+  scale_y_continuous(limits = c(0,100), expand = c(0,0)) +
+  theme_minimal() +
+  theme(legend.position = "none",
+        legend.title = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(margin = margin(r = 20)),
+        axis.title.x = element_text(margin = margin(t = 20)),
+        axis.line = element_line(color = "black", size = 0.5),
+        text = element_text(family = "Arial")) 
+
+#display graph
+figure7
+
+# get today's date to add to graph file name
+date <- Sys.Date()
+date <- gsub("-","",date)
+
+# save graph to working directory
+ggsave(paste0("Nonresponse_",date), device = "png", units = "in", width = 7, height = 4)
+```
+<br>
+<br>
+<br>
+
+
+
+# Session Info 
+```{r, echo = FALSE}
+sessionInfo()
+```
+

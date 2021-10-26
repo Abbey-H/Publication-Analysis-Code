@@ -1,0 +1,411 @@
+---
+title: "Hammell_Analysis_GEN"
+author: "Abbey Hammell"
+output: html_document
+---
+
+The following code outlines the Generalization phase analyses completed for Hammell et al., "Temporal Course of Over-Generalized Conditioned Threat Expectancies in Posttraumatic Stress Disorder". 
+
+### Step 1 - Preparing the (Generalization) Data for Analyses
+
+#Set up R workspace
+```{r}
+rm(list = ls()) #clear workspace
+
+install.packages("pacman") #install pacman (package manager)
+pacman::p_load(bigsplines) #install bigsplines package
+```
+
+### Load Data
+```{r load-data}
+datapath <- "~/Desktop/" #set directory of where data is located
+dataGEN <- "data.csv" #give name of datafile
+ptsd <- read.csv(file = paste0(datapath, dataGEN),
+                 header = TRUE) #load data
+```
+
+### Rename Variables
+The following code simply renamed our variables to be easier to work with in R. You may not need this step if you are already satisfied with your variable names. 
+```{r rename-variables}
+snames <- c("vCSm","oCSm","GS1","GS2","GS3","CSp")
+tnames <- paste0("P", 1:10)
+vnames <- c("SubID","Group",
+            paste(tnames, rep(snames, each = 10), sep = "."))
+names(ptsd) <- vnames
+```
+
+### Convert to Data Frame
+Our data was imported in short form (i.e., when a single row contains all of the data for one participant). The SSANOVA requires data to be in long form (i.e., when a single row contains a single observation). The following code transformed our short form data into long form. You may find another way to change your data into long form that is more convenient for you. In the end, you should have a dataframe that has a column for Subject ID, Group, Trial, Stimulus, and Risk if you were to do the same thing that we did below. 
+```{r convert-data-frame}
+slevels <- c("vCS-", "oCS-", "GS1", "GS2", "GS3", "CS+")
+nvar <- 60L # 10 trials x 6 stimuli
+ptsd.df <- data.frame(SubID = rep(ptsd$SubID, each = nvar),
+                      Group = rep(ptsd$Group, each = nvar),
+                      Trial = rep(1:10, times = 6),
+                      Stimulus = rep(slevels, each = 10),
+                      Risk = c(t(ptsd[,1:nvar + 2])))
+```
+
+### Convert Factors
+```{r convert-factors}
+ptsd.df$SubID <- factor(ptsd.df$SubID) #ensure that Subject ID is factor variable
+ptsd.df$Stimulus <- factor(ptsd.df$Stimulus,
+                           levels = slevels, ordered = TRUE) #ensure that stimulus type is an ordered factor variable
+#You will need to ensure that your stimulus levels are in the correct order; ours naturally fell in the correct order (i.e., vCS-, oCS-, GS1, GS2, GS3, to CS+). To examine the order of your levels, you can use the function levels(ptsd.df$Stimulus).
+```
+
+### Remove NA Data
+```{r remove-na-data}
+ix <- which(is.na(ptsd.df$Risk)) #find which observations are missing
+ptsd.df <- ptsd.df[-ix,] #remove missing observations from the dataset 
+```
+
+
+### Step 2 - Fitting the SSANOVA Model ###
+Our overall nonparametric regression model was fit using the "bigssp" function in the “bigsplines” R package. Before we fit the model, we must specify the number and location of our knots. The knots are the locations across the values of the independent/predictor variables at which the model coefficients are allowed to change. Below is the code that we used to obtain our knots. All unique predictor value combinations were used as knots for this analysis. The present model uses 180 knots (there are 3 groups x 10 trials x 6 stimuli, so there is a total of 180 unique values of y to estimate).
+
+### Get Knots
+```{r get-knots}
+knotID <- NULL
+for(ii in 1:10){ #for ii in number of trials (we specified 1:10 here because we have 10 trials)
+  idT <- (ptsd.df$Trial == ii)
+  for(jj in levels(ptsd.df$Stimulus)){ #for jj in levels of stimulus
+    idS <- (ptsd.df$Stimulus == jj)
+    for(kk in levels(ptsd.df$Group)){ #for kk in levels of group
+      idG <- (ptsd.df$Group == kk)
+      ixnew <- which(idT & idS & idG) 
+      knotID <- c(knotID, ixnew[1])
+    }
+  }
+}
+```
+
+### Fit Model
+```{r fit-model}
+types <- list(Trial = "cub", Group = "nom", Stimulus = "ord") #specify what types of spline each predictor variable will use
+rmod <- bigssp(Risk ~ Trial * Group * Stimulus,
+               data = ptsd.df,
+               type = types,
+               nknots = knotID,
+               random = ~ Group | SubID,
+               skip.iter = T)
+```
+The first argument, (i.e., Risk ~ Trial x Group x Stimulus) is the model formula, which specifies that our response variable, Risk, should be predicted by our predictor variables, Trial, Stimulus, and Group. The asterisks in between the independent variables indicate that both the main effect of each predictor and all of the corresponding interaction effects should be included in the model. 
+  
+The argument "data" indicates that we should obtain the variables specified in the model formula argument from the data frame called “ptsd.df” in our R environment, which includes all of our variables of interest. 
+  
+The argument “nknots” refers to the number and location of knots the model should use. All unique predictor value combinations were used as knots. The present model uses 180 knots (there are 3 groups x 10 trials x 6 stimuli, so there is a total of 180 unique values of y to estimate). Basic information on knots, knot selection, and knot placement can be found in Gu (2013) and James et al. (2013, pg. 274). The following code was used to find the total unique points in our dataset, which we used as our knots. 
+
+The argument “type” denotes the type of smoothing spline that should be used for each predictor. In our case, Trial uses a cubic smoothing spline, Stimulus uses an ordinal smoothing spline, and Group uses a nominal smoothing spline. More information on types of smoothing splines can be found in Gu (2013) and Helwig (2017). 
+  
+The argument “random” in the code above indicates how random effects should be added to the model. In our case, the levels of Subject (i.e., SubID) are nested within Group.
+  
+The argument “skip-iter” specifies whether or not the iterative smoothing parameter update should be skipped when obtaining the model. 
+
+More information on fitting a model with the "bigssp" function can be found in Helwig (2018). 
+
+
+### Model Diagnostics ###
+
+
+### Variance Parameters
+After the model has been fit, variance parameters and the intraclass correlation coefficient of the random effects can be found through the following. 
+```{r variance-parameters}
+#obtaining variance parameters of the random effects
+rmod$sigma^2 * c(error = 1, rmod$tau)
+```
+
+### Intraclass Correlation Coefficient (ICC)
+```{r icc}
+#obtaining intraclass correlation coefficients
+rmod$tau / (1 + rmod$tau)
+```
+
+### R-squared Values
+The R-squared value for fixed + random effects can be found with the "blup" (best linear unbiased predictors) result obtained through fitting the model with "bigssp".  R-squared values of the code for fixed effects only and combined fixed + random effects can be obtained by the following. 
+```{r r-squared}
+blupID <- match(ptsd.df$SubID, names(rmod$blup))
+blups <- rmod$blup[blupID]
+yhat <- rmod$fitted.values + blups
+cor(ptsd.df$Risk, rmod$fitted.values)^2  # fixed effects only
+cor(ptsd.df$Risk, yhat)^2  # fixed and random effects
+```
+
+### Histogram of the residuals
+The SSANOVA model assumes that the residuals are normally distributed, independent, and identically distributed. A histogram of the residuals can be obtained by the following. 
+```{r, eval = FALSE, tidy = TRUE}
+hist(ptsd.df$Risk - yhat)
+```
+
+### Cosine diagnostic values
+The cosine diagnostic values are a proportion breakdown of how much each effect term contributes to the overall fitted values of the SSANOVA model. For example, if we have a model R-squared = .20, a cosine diagnostic value of .50 for a specific term indicates that the term is contributing to .50 of the R-squared of the model, or .10 of the whole model (Gu, 2013). The cosine diagnostics of the model can be obtained by the following.
+```{r, eval = FALSE}
+summary(rmod, diagnostics = TRUE)$pi
+```
+
+
+#######
+##############
+######################## CONTRASTS
+##############
+#######
+
+### STEP 3 - STIMULUS CONTRASTS ###
+
+For more information on the contrast technique, in general, the authors encourage the reader to review Helwig, Shorter, Ma, & Hsiao-Wecksler (2016). The code outlined in this section was used to find the stimulus contrasts. First, we find the matrix square-root of the covariance matrix of the coefficients, which will be used for calculation of the standard errors of our contrasts. 
+```{r}
+coefsqrt <- rmod$modelspec$coef.csqrt
+```
+
+Next, we want to specify our reference stimulus (i.e., vCS-) and specify a vector of stimuli that we are contrasting with our reference stimulus. 
+```{r}
+ref <- "vCS-" #the reference stimulus
+
+oth <- levels(ptsd.df$Stimulus)[-1]  #each other level of the stimuli you want to contrast with reference
+#in our case, "oth" contains oCS-, GS1, GS2, GS3, and CS+ in a vector
+```
+
+Next, we can run the for-loop below that calculates stimulus contrasts for each group at each stimulus/trial combination. The output of the for-loop creates a dataframe that includes the stimulus contrast estimates "fit", corresponding standard error of the estimates "se.fit", t-statistic "t.value", and "p.value" for each trial, group, and stimulus combination. 
+```{r stimulus-contrasts}
+#create a blank dataframe in which to add results from the for loop below
+difStm <- NULL 
+for(g in levels(ptsd$Group)){ #for each group 
+  newdata.ref <- expand.grid(Trial = 1:10, #we have 10 trials
+                             Group = g,
+                             Stimulus = ref)
+  pred.ref <- predict(rmod, newdata.ref, design = TRUE) #find model predictions
+  for(s in oth){ #for each stimulus that we are contrasting with our reference stimulus
+    newdata.oth <- expand.grid(Trial = 1:10, #we have 10 trials
+                               Group = g,
+                               Stimulus = s)
+    pred.oth <- predict(rmod, newdata.oth, design = TRUE) #find model predictions
+    #find stimulus contrast estimates
+    dif.fit <- pred.oth$fit - pred.ref$fit
+    #SE step 1 - find stimulus contrast estimate SE
+    dif.X <- pred.oth$X - pred.ref$X 
+    #SE step 2 - find stimulus contrast estimate SE
+    dif.var <- rowSums( (dif.X %*% coefsqrt)^2 ) 
+    #SE step 3 - find stimulus contrast estimate SE
+    dif.se <- sqrt(dif.var)
+    #find t-stat
+    Tstat <- dif.fit / dif.se 
+    #find p-value of t-stat
+    pval <- 2*(1 - pnorm(abs(Tstat))) 
+    #create a dataframe of the results
+    newdiff <- data.frame(fit = dif.fit, 
+                          se.fit = dif.se,
+                          t.value = Tstat,
+                          p.value = pval,
+                          Trial = 1:10,
+                          Group = g,
+                          Stimulus = s,
+                          Reference = ref)
+    difStm <- rbind(difStm, newdiff)
+  }
+}
+head(difStm)
+```
+
+
+
+### STEP 4 - GROUP-STIMULUS CONTRASTS (AVERAGED GSs) ###
+
+IMPORTANT NOTE: The following code can be run without having to run the stimulus contrasts code. The following code is used to find the group-stimulus contrasts for the AVERAGED GSs. 
+
+First, we find the matrix square-root of the covariance matrix of the coefficients, which will be used for calculation of the standard errors of our contrasts. This is the same calculation as used in the stimulus contrasts above. 
+```{r}
+coefsqrt <- rmod$modelspec$coef.csqrt
+```
+
+Next, we want to specify our Group levels, our reference stimulus (vCS-), and a vector of stimuli that we are contrasting with our reference stimulus. 
+```{r}
+glevels <- levels(ptsd.df$Group) #vector includes groups of interest (i.e., PTSD, SubPTSD, and trauma controls)
+
+GS <- c("GS1", "GS2", "GS3") #stimuli we want to average and then contrast with vCS-
+ref <- "vCS-" #reference stimulus
+```
+
+Next, we can run the for-loop below that calculates group-stimulus contrasts for the averaged GSs for each group comparison combination (i.e., PTSD vs. TC, SubPTSD vs. TC, and PTSD vs. SubPTSD) at each trial. Note that as we are interested in contrasting the AVERAGE of the GSs to the vCS-, the for-loop includes an averaging of the fit of the three GSs. 
+
+The output of the for-loop creates a dataframe that includes the group-stimulus contrast estimate "fit", corresponding standard error "se.fit", t-statistic "t.value", 95% CI, and "p.value" for each trial and group combination. "Group1" in the dataframe denotes the comparison group for the contrast and "Group2" is the reference group.  
+```{r group-stimulus-contrasts-GSaverage}
+#create a blank dataframe from which to add the results of the for-loop below
+difAvgGrp <- NULL
+for(g1 in 1:2){ #for each Group in levels(ptsd.df$Group) index 1 & 2 (i.e., SubPTSD and TC groups)
+
+  # Obtaining Stimulus Contrasts for Group 1
+  newdata.ref <- expand.grid(Trial = 1:10, #we have 10 trials
+                             Group = glevels[g1],
+                             Stimulus = ref)
+  pred.ref <- predict(rmod, newdata.ref, design = TRUE) #find model predictions
+  fit.GS <- X.GS <- 0
+  for(k in 1:3){
+    newdata.k <- expand.grid(Trial = 1:10, #we have 10 trials
+                             Group = glevels[g1],
+                             Stimulus = GS[k])
+    pred.k <- predict(rmod, newdata.k, design = TRUE) #find model predictions
+    #obtain average fit for all three GSs
+    fit.GS <- fit.GS + pred.k$fit / 3
+    #obtain design matrix for the average fit of GSs 
+    X.GS <- X.GS + pred.k$X / 3
+  }
+  #find stimulus contrast estimate for Group1 for the averaged GSs
+  dif.fit1 <- fit.GS - pred.ref$fit
+  #SE step 1a - find stimulus contrast estimate SE for the averaged GSs
+  dif.X1 <- X.GS - pred.ref$X
+
+  for(g2 in (g1+1):3){ #for each Group in levels(ptsd.df$Group) index 2 & 3 (i.e., PTSD and SubPTSD groups)
+
+    # Obtaining Stimulus Contrasts for Group 2
+    newdata.ref <- expand.grid(Trial = 1:10, #we have 10 trials
+                               Group = glevels[g2],
+                               Stimulus = ref)
+    pred.ref <- predict(rmod, newdata.ref, design = TRUE) #find model predictions
+    fit.GS <- X.GS <- 0
+    for(k in 1:3){
+      newdata.k <- expand.grid(Trial = 1:10, #we have 10 trials
+                               Group = glevels[g2],
+                               Stimulus = GS[k])
+      pred.k <- predict(rmod, newdata.k, design = TRUE) #find model predictions
+      #obtain average fit for all three GSs
+      fit.GS <- fit.GS + pred.k$fit / 3
+      #obtain design matrix for the average fit of GSs 
+      X.GS <- X.GS + pred.k$X / 3
+    }
+    #find stimulus contrast estimate for Group2 for the averaged GSs
+    dif.fit2 <- fit.GS - pred.ref$fit
+    #SE step 1b - find stimulus contrast estimate SE for the averaged GSs
+    dif.X2 <- X.GS - pred.ref$X
+
+    ###### Group-Stimulus Contrasts ###
+    
+    # Group1 Stimulus Contrast fit minus Group2 Stimulus Contrast fit
+    dif.fit <- dif.fit1 - dif.fit2
+    #SE step 2 - find stimulus contrast estimate SE for the averaged GSs
+    dif.X <- dif.X1 - dif.X2
+    #SE step 3 - find stimulus contrast estimate SE for the averaged GSs
+    dif.var <- rowSums( (dif.X %*% coefsqrt)^2 )
+    #SE step 4 - find stimulus contrast estimate SE for the averaged GSs
+    dif.se <- sqrt(dif.var)
+    #find t-stat
+    Tval <- dif.fit / dif.se
+    #find p-value
+    pval <- 2*(1 - pnorm(abs(Tval)))
+    #find 95% confidence interval 
+    CI <- paste0("[",round(dif.fit - (1.96*dif.se),2),", ",round(dif.fit + (1.96*dif.se),2),"]")
+    #create a dataframe of the results
+    newdiff <- data.frame(fit = dif.fit,
+                          se.fit = dif.se,
+                          t.value = Tval,
+                          p.value = pval,
+                          Trial = 1:10,
+                          CI.95 = CI,
+                          Group1 = glevels[g1],
+                          Group2 = glevels[g2],
+                          Stimulus = "GS.avg",
+                          Reference = ref)
+    difAvgGrp <- rbind(difAvgGrp, newdiff)
+  }
+} 
+head(difAvgGrp)
+```
+
+
+### STEP 5 - GROUP-STIMULUS CONTRASTS ###
+
+IMPORTANT NOTE: The following code can be run without having to run the stimulus contrasts code (Step 3) or group-stimulus average contrasts code (Step 4). 
+
+The following code was used to find the group-stimulus contrasts for each specific stimulus type. It is very similar to the code used to find the group-stimulus contrasts for the averaged GSs with just a few key differences. Again, we find we find the matrix square-root of the covariance matrix of the coefficients, which will be used for calculation of the standard errors of our contrasts. This is the same calculation as used in the stimulus contrasts and group-stimulus average contrasts above. 
+```{r}
+coefsqrt <- rmod$modelspec$coef.csqrt
+```
+
+Next, we want to specify our group levels, our reference stimulus (i.e., vCS-), and a vector of stimuli that we are contrasting with our reference stimulus. 
+```{r}
+glevels <- levels(ptsd.df$Group) #specify group levels
+ref <- "vCS-" #specify reference stimulus
+oth <- levels(ptsd.df$Stimulus)[-1] #specify vector we contrast with our reference stimulus; in our case, this includes (oCS-, GS1, GS2, GS3, and CS+)
+```
+
+Next, we can run the for-loop below that calculates group-stimulus contrasts for each specific stimulus type and group comparison combination (i.e., PTSD vs. TC, SubPTSD vs. TC, and PTSD vs. SubPTSD) at each trial. The output of the for-loop creates a dataframe that includes the group-stimulus contrast estimates "fit", corresponding standard error of the estimates "se.fit", t-statistic "t.value", 95% CI, and "p.value" for each group, stimulus, and trial combination. "Group1" in the dataframe denotes the comparison group for the contrast and "Group2" is the reference group. 
+```{r group-stimulus contrasts}
+#create a blank dataframe from which to add the results of the for-loop below
+difStmGrp <- NULL  
+for(s in oth){ #for each stimulus in our "oth" vector
+  for(g1 in 1:2){ #for each Group in levels(ptsd.df$Group) index 1 & 2 (i.e., SubPTSD and TC groups)
+    # Find stimulus contrasts for each reference group (SubPTSD or TC)
+    newdata.ref1 <- expand.grid(Trial = 1:10, #we have 10 trials
+                                Group = glevels[g1],
+                                Stimulus = ref)
+    pred.ref1 <- predict(rmod, newdata.ref1, design = TRUE) #find model predictions
+    newdata.oth1 <- expand.grid(Trial = 1:10, #we have 10 trials
+                                Group = glevels[g1],
+                                Stimulus = s)
+    pred.oth1 <- predict(rmod, newdata.oth1, design = TRUE) #find model predictions
+    #find stimulus contrast for reference group
+    dif.fit1 <- pred.oth1$fit - pred.ref1$fit 
+    #SE step 1a - find stimulus contrast estimate SE for the averaged GSs
+    dif.X1 <- pred.oth1$X - pred.ref1$X
+
+    for(g2 in (g1+1):3){ #for each Group in levels(ptsd.df$Group) index 2 & 3 (i.e., PTSD and SubPTSD groups)
+      # Find stimulus contrast for each comparison group (PTSD or SubPTSD)
+      newdata.ref2 <- expand.grid(Trial = 1:10, #we have 10 trials
+                                  Group = glevels[g2],
+                                  Stimulus = ref)
+      pred.ref2 <- predict(rmod, newdata.ref2, design = TRUE) #find model predictions
+      newdata.oth2 <- expand.grid(Trial = 1:10, #we have 10 trials
+                                  Group = glevels[g2],
+                                  Stimulus = s)
+      pred.oth2 <- predict(rmod, newdata.oth2, design = TRUE) #find model predictions
+      #find stimulus contrast for comparison group
+      dif.fit2 <- pred.oth2$fit - pred.ref2$fit 
+      #SE step 1b - find stimulus contrast estimate SE for the specific GSs
+      dif.X2 <- pred.oth2$X - pred.ref2$X 
+      
+      ### Group-Stimulus Contrasts ###
+      
+      # Group1 Stimulus Contrast fit minus Group2 Stimulus Contrast fit
+      dif.fit <- dif.fit1 - dif.fit2 
+      #SE step 2 - find stimulus contrast estimate SE for the specific GSs
+      dif.X <- dif.X1 - dif.X2
+      #SE step 3 - find stimulus contrast estimate SE for the specific GSs
+      dif.var <- rowSums( (dif.X %*% coefsqrt)^2 )
+      #SE step 4 - find stimulus contrast estimate SE for the specific GSs
+      dif.se <- sqrt(dif.var)
+      #find t-stat
+      Tval <- dif.fit / dif.se
+      #find p.value
+      pval <- 2*(1 - pnorm(abs(Tval))) 
+      #find 95% confidence interval 
+      CI <- paste0("[",round(dif.fit - (1.96*dif.se),2),", ",round(dif.fit + (1.96*dif.se),2),"]")
+      #create a dataframe of the results
+      newdiff <- data.frame(fit = dif.fit, 
+                            se.fit = dif.se,
+                            t.value = Tval,
+                            p.value = pval,
+                            CI.95 = CI,
+                            Trial = 1:10,
+                            Group1 = glevels[g1],
+                            Group2 = glevels[g2],
+                            Stimulus = s,
+                            Reference = ref)
+      difStmGrp <- rbind(difStmGrp, newdiff)
+    } 
+  } 
+} 
+head(difStmGrp)
+```
+
+
+
+###### References ######
+
+Gu, C. (2013). *Smoothing spline anova models* (Second ed.). New York: Springer-Verlag.
+
+Helwig, N. E. (2016). Efficient estimation of variance components in nonparametric mixed-	effects models with large samples. *Statistics and Computing*, *26(6)*, 1319-1336.
+
+Helwig, N. E. (2017). Regression with ordered predictors via ordinal smoothing splines. *Frontiers in Applied Mathematics and Statistics*, *3*, 15.
+
+Helwig, N. E. (2018). bigsplines: Smoothing Splines for Large Samples. R package version 	1.1-1. https://CRAN.R-project.org/package=bigsplines
+
+James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An introduction to statistical learning with applications in R*. New York, NY: Springer.

@@ -1,0 +1,321 @@
+---
+title: "Hammell_Analysis_OTHER"
+author: "Abbey Hammell"
+output: html_document
+---
+
+The following code outlines the Pre-acqusition and Acquisition phase analyses completed for Hammell et al., "Temporal Course of Over-Generalized Conditioned Threat Expectancies in Posttraumatic Stress Disorder". Note that this document is meant for reproducibility/replicability purposes for Pre-acqusition and Acquisition phases. To understand the general procedure for the SSANOVA analyses and contrast analyses, it is recommended that you review the "Hammell_Analysis_GEN.rmd" file, which contains a better walkthrough/outline of the procedure. Please note that the groups in our PreACQ and ACQ data were specified as 2 = Trauma Control; 3 = SubPTSD; and 4 = PTSD. 
+
+#Set up R workspace
+```{r}
+rm(list = ls()) #clear workspace
+
+pacman::p_load(bigsplines) #install & attach bigsplines package (note: the "pacman" package needs to be installed)
+```
+
+
+
+#PRE-ACQUISITION ANALYSES
+
+###Load Data
+```{r load-data}
+datapath <- "~/Desktop/Quick Access Files/" #set directory of where data is located
+dataPREACQ <- "PreACQData_201901.csv" #give name of datafile
+ptsd.PreACQ <- read.csv(file = paste0(datapath, dataPREACQ),
+                 header = TRUE) #load data
+```
+
+### Convert to Data Frame
+```{r convert-data-frame}
+slevels <- c("vCS-", "oCS-", "GS1", "GS2", "GS3", "CS+")
+nvar <- 6L 
+ptsd.PreACQ.df <- data.frame(SubID = rep(ptsd.PreACQ$ID, each = nvar),
+                      Group = rep(ptsd.PreACQ$Group, each = nvar),
+                      Stimulus = rep(slevels, each = 1),
+                      Risk = c(t(ptsd.PreACQ[,4:9])))
+```
+
+### Convert Factors
+```{r convert-factors}
+ptsd.PreACQ.df$SubID <- factor(ptsd.PreACQ.df$SubID) #ensure subject ID is a factor variable
+ptsd.PreACQ.df$Stimulus <- factor(ptsd.PreACQ.df$Stimulus,
+                           levels = slevels, ordered = TRUE) #ensure Stimulus is an ordered factor
+ptsd.PreACQ.df$Group <- factor(ptsd.PreACQ.df$Group) #ensure group is a factor variable
+```
+
+IMPORTANT NOTE: N/As weren't taken out with code for PREACQ because there were no missing observations for Risk. You will want to take out missing observations at this point if you do have any. 
+
+
+## Fitting the SSANOVA Model 
+
+### Get Knots
+Our overall nonparametric regression model was fit using the "bigssp" function in the “bigsplines” R package. Before we fit the model, we must specify the number and location of our knots. The knots are the locations across the values of the independent/predictor variables at which the model coefficients are allowed to change. Below is the code that we used to obtain our knots for the Acquisition phase. All unique predictor value combinations were used as knots. The present model uses 180 knots (there are 3 groups x 6 stimuli, so there is a total of 18 unique values of y to estimate).
+
+```{r}
+#we do not include trials in this code like we do for GEN or ACQ because we are not interested in trials
+knotID <- NULL
+  for(jj in levels(ptsd.PreACQ.df$Stimulus)){ #for jj in levels of stimulus
+    idS <- (ptsd.PreACQ.df$Stimulus == jj)
+    for(kk in levels(ptsd.PreACQ.df$Group)){ #for kk in levels of group
+      idG <- (ptsd.PreACQ.df$Group == kk)
+      ixnew <- which(idS & idG)
+      knotID <- c(knotID, ixnew[1])
+    }
+  }
+```
+
+### Fit Model  
+```{r fit-model}
+types <- list(Group = "nom", Stimulus = "ord") #specify what types of spline each predictor variable will use
+rmod <- bigssp(Risk ~ Group * Stimulus,
+               data = ptsd.PreACQ.df,
+               nknots = knotID,
+               type = types,
+               random = ~ Group | SubID,
+               skip.iter = F)
+```
+
+### Variance Parameters
+```{r variance-parameters}
+rmod$sigma^2 * c(error = 1, rmod$tau)
+```
+
+### Intraclass Correlation Coefficient (ICC)
+```{r icc}
+rmod$tau / (1 + rmod$tau)
+```
+
+### R-squared Values
+```{r r-squared}
+blupID <- match(ptsd.PreACQ.df$SubID, names(rmod$blup))
+blups <- rmod$blup[blupID]
+yhat <- rmod$fitted.values + blups
+cor(ptsd.PreACQ.df$Risk, rmod$fitted.values)^2  # fixed effects only
+cor(ptsd.PreACQ.df$Risk, yhat)^2  # fixed and random effects
+```
+
+### Histogram of the residuals
+```{r}
+hist(ptsd.PreACQ.df$Risk - yhat)
+```
+
+
+
+
+
+
+# ACQUISITION ANALYSES 
+
+## STEP 1 - Preparing the Data for Analyses
+
+### Load Data
+```{r}
+datapath <- "~/Desktop/Quick Access Files/" #set directory of where data is located
+dataACQ <- "MARSRR_ACQData.csv" #give name of datafile
+ptsd.ACQ <- read.csv(file=paste0(datapath, dataACQ), header=T)
+```
+
+### Rename Variables
+```{r}
+vnames <- c("SubID","Group", 
+            paste(paste0("P",1:8), rep(c("vCSm","oCSm","CSp"),each=8),sep="."))
+names(ptsd.ACQ) <- vnames
+```
+
+### Convert to Data Frame
+```{r}
+nvar <- 24L #3 trials x 8 stimuli
+ptsd.ACQ.df <- data.frame(SubID = rep(ptsd.ACQ$SubID, each=24),
+                      Group = rep(ptsd.ACQ$Group, each=24),
+                      Trial = rep(1:8, 3),
+                      Stimulus = rep(c("vCS-","oCS-","CS+"),each=8),
+                      Risk = c(t(ptsd.ACQ[,-c(1:2)])))
+```
+
+###Convert Factors
+```{r}
+ptsd.ACQ.df$SubID <- factor(ptsd.ACQ.df$SubID) #ensure subject ID is a factor variable
+ptsd.ACQ.df$Group <- factor(ptsd.ACQ.df$Group, ordered = FALSE) #ordered = F specified because our groups were specified by numbers originally, but this was not the same for generalization 
+ptsd.ACQ.df$Stimulus <- factor(ptsd.ACQ.df$Stimulus, ordered=TRUE, levels=c("vCS-","oCS-","CS+")) #convert stimulus to ordered factors
+```
+
+###Remove NA Data
+```{r}
+ix <- which(is.na(ptsd.ACQ.df$Risk)) #find which observations are missing
+ptsd.ACQ.df <- ptsd.ACQ.df[-ix,] #remove missing observations from the dataset 
+```
+
+## STEP 2 - Fitting the SSANOVA Model
+
+### Get knots
+```{r}
+#note that this for loop does the same thing as in the GEN script; it's just an alternative way of coding the for loop
+knotID <- NULL 
+for(ii in 1:8){ #for ii in number of trial (8 trials in Acquisition)
+  for(jj in levels(ptsd.ACQ.df$Stimulus)){
+    for(kk in levels(ptsd.ACQ.df$Group)){
+      ixnew <- which(ptsd.ACQ.df$Trial==ii & ptsd.ACQ.df$Stimulus==jj & ptsd.ACQ.df$Group==kk)
+      knotID <- c(knotID, ixnew[1])
+    }
+  }
+}
+```
+
+### Fit model
+```{r}
+types <- list(Trial="cub",Stimulus="ord",Group="nom") #specify what types of spline each IV will use
+rmod.ACQ <- bigssp(Risk ~ Trial * Group * Stimulus, 
+                   data=ptsd.ACQ.df, 
+                   nknots=knotID, 
+                   type= types, 
+                   random=  ~ Group | SubID, 
+                   skip.iter=T)
+```
+
+## Model Diagnostics 
+
+### Variance Parameters
+```{r}
+#obtaining variance parameters of the random effects
+rmod.ACQ$sigma^2 * c(error = 1, rmod.ACQ$tau)
+```
+
+### Intraclass Correlation Coefficient (ICC)
+```{r}
+#obtaining intraclass correlation coefficients
+rmod.ACQ$tau / (1 + rmod.ACQ$tau)
+```
+
+### R-squared
+```{r}
+yhat <- rmod.ACQ$fitted.values + rmod.ACQ$blup[match(ptsd.ACQ.df$SubID,names(rmod.ACQ$blup))]
+cor(ptsd.ACQ.df$Risk, rmod.ACQ$fitted.values)^2 #fixed effects only
+cor(ptsd.ACQ.df$Risk, yhat)^2 #fixed and random effects
+```
+
+### Histogram of the residuals
+```{r}
+hist(ptsd.ACQ.df$Risk - yhat)
+```
+
+### Cosine diagnostics
+```{r}
+summary(rmod.ACQ, diagnostics = TRUE)$pi
+```
+
+
+## STEP 3 - Stimulus Contrasts
+
+R code to get differences between estimated CS+ and oCS- response, relative to the vCS- response, for each separate group. Note that the code for the stimulus contrasts and group-stimulus contrasts for the Acquisition phase are almost exactly the same as the code used for analyzing the Generalization phase (see other R markdown file associated with this paper). The only modifications made are those to accomodate the change in trial number. We also calculated 95% CIs to put into the completed dataframe.
+
+First, we find the matrix square-root of the covariance matrix of the coefficients, which will be used for calculation of the standard errors of our contrasts. Next, we want to specify our reference stimulus (vCS) and specify a vector of stimuli ("oth") that we are contrasting with our reference stimulus.
+```{r}
+coefsqrt <- rmod.ACQ$modelspec$coef.csqrt
+ref <- "vCS-"  #this can be changed to "oCS-" if you wanted to, say, contrast the CS+ with the oCS-
+oth <- levels(ptsd.ACQ.df$Stimulus)[-1] # in our case, assigning "oth" as a vector of our other two stimuli, "CS+" and "oCS-"
+```
+
+Next, we can run the for-loop below that calculates stimulus contrasts for each group at each stimulus/trial combination. 
+```{r stimulus contrasts}
+difStm.ACQ <- NULL
+for(g in levels(ptsd.ACQ.df$Group)){
+  newdata.ref <- expand.grid(Trial = 1:8, #we have 8 risk trials per stimulus type
+                             Group = g,
+                             Stimulus = ref)
+  pred.ref <- predict(rmod.ACQ, newdata.ref, design = TRUE)
+  for(s in oth){
+    newdata.oth <- expand.grid(Trial = 1:8, #we have 8 risk trials per stimulus type
+                               Group = g,
+                               Stimulus = s) 
+    pred.oth <- predict(rmod.ACQ, newdata.oth, design = TRUE)
+    dif.fit <- pred.oth$fit - pred.ref$fit
+    dif.X <- pred.oth$X - pred.ref$X
+    dif.var <- rowSums( (dif.X %*% coefsqrt)^2 )
+    dif.se <- sqrt(dif.var)
+    Tstat <- dif.fit / dif.se
+    CI95 <- paste0("[",round(dif.fit - (1.96*dif.se),2),", ",round(dif.fit + (1.96*dif.se),2),"]")
+    pval <- 2*(1 - pnorm(abs(Tstat)))
+    newdiff <- data.frame(fit = dif.fit, #estimates
+                          se.fit = dif.se, #standard error of the estimates
+                          t.value = Tstat, #t-stat
+                          p.value = pval, #p-value
+                          CI.95 = CI95, #upper and lower 95% confidence interval
+                          Trial = 1:8, 
+                          Group = g,
+                          Stimulus = s,
+                          Reference = ref) #reference stimulus
+    difStm.ACQ <- rbind(difStm.ACQ, newdiff)
+  }
+}
+head(difStm.ACQ)
+```
+
+## STEP 4 - Group-Stimulus Contrasts
+
+```{r}
+coefsqrt <- rmod.ACQ$modelspec$coef.csqrt
+glevels <- levels(ptsd.ACQ.df$Group)
+ref <- "oCS-"   # reference
+oth <- "CS+"  # other stimulus
+#Note, you can change the "oth" stimulus and "ref" stimulus to any combination you want and re-run the for-loop below to get results for a contrast between any specific stimuli of your choosing; recall that the "ref" stimulus will always have its estimate subtracted from the "oth" stimulus' estimate. In the code above, we are specifying a CS+ vs. oCS- contrast. 
+```
+
+```{r stimulus-group-contrasts}
+difStmGrp.ACQ <- NULL
+for(s in oth){ #for each stimulus specified in "oth"
+  for(g1 in 1:2){ #for each Group in levels(ptsd.df$Group) index 1 & 2 (i.e., SubPTSD and TC groups)
+    # Find stimulus contrasts for each reference group (SubPTSD or TC)
+    newdata.ref1 <- expand.grid(Trial = 1:8,  #we have 8 risk trials per stimulus type
+                                Group = glevels[g1],
+                                Stimulus = ref)
+    #predict values for reference (vCS-) for the 1st & 2nd Group in glevels
+    pred.ref1 <- predict(rmod.ACQ, newdata.ref1, design = TRUE) 
+    newdata.oth1 <- expand.grid(Trial = 1:8, #we have 8 risk trials per stimulus type
+                                Group = glevels[g1],
+                                Stimulus = s)
+    #predict values for other stimuli for the 1st & 2nd Group in glevels
+    pred.oth1 <- predict(rmod.ACQ, newdata.oth1, design = TRUE)
+    #find the stimulus contrast for the 1st group
+    dif.fit1 <- pred.oth1$fit - pred.ref1$fit
+    dif.X1 <- pred.oth1$X - pred.ref1$X
+
+    for(g2 in (g1+1):3){ #for each Group in levels(ptsd.df$Group) index 2 & 3 (i.e., PTSD and SubPTSD groups)
+
+      # Find stimulus contrast for each comparison group (PTSD or SubPTSD)
+      newdata.ref2 <- expand.grid(Trial = 1:8,  #we have 8 risk trials per stimulus type
+                                  Group = glevels[g2],
+                                  Stimulus = ref)
+      pred.ref2 <- predict(rmod.ACQ, newdata.ref2, design = TRUE)
+      newdata.oth2 <- expand.grid(Trial = 1:8,  #we have 8 risk trials per stimulus type
+                                  Group = glevels[g2],
+                                  Stimulus = s)
+      pred.oth2 <- predict(rmod.ACQ, newdata.oth2, design = TRUE)
+      dif.fit2 <- pred.oth2$fit - pred.ref2$fit
+      dif.X2 <- pred.oth2$X - pred.ref2$X
+
+      # Difference = Group 2 minus Group 1
+      dif.fit <- dif.fit2 - dif.fit1
+      dif.X <- dif.X2 - dif.X1
+      dif.var <- rowSums( (dif.X %*% coefsqrt)^2 )
+      dif.se <- sqrt(dif.var)
+      CI95 <- paste0("[",round(dif.fit - (1.96*dif.se),2),", ",round(dif.fit + (1.96*dif.se),2),"]")
+      Tval <- dif.fit / dif.se
+      pval <- 2*(1 - pnorm(abs(Tval)))
+      newdiff <- data.frame(fit = dif.fit, #estimates
+                            se.fit = dif.se, #standard error of the estimates
+                            t.value = Tval, #t-stat
+                            p.value = pval, #p-value
+                            Trial = 1:8, #there are 8 trials of risk appraisals per stimulus in the Acquisition phase
+                            CI.95 = CI95, #upper and lower 95% confidence interval
+                            Group1 = glevels[g1], #specifies first group
+                            Group2 = glevels[g2], #specifies second group
+                            Stimulus = s,
+                            Reference = ref) #reference stimulus
+      difStmGrp.ACQ <- rbind(difStmGrp.ACQ, newdiff)
+
+    }
+  } 
+} 
+head(difStmGrp.ACQ)
+```
+
